@@ -31,35 +31,37 @@ jobs:
       with:
         msystem: ${{ matrix.env }}
         update: true
-        # لیست نصب رو یک‌خطی کردم که گیت‌هاب گیج نشه
         install: mingw-w64-${{ matrix.arch }}-gcc mingw-w64-${{ matrix.arch }}-cmake mingw-w64-${{ matrix.arch }}-ninja mingw-w64-${{ matrix.arch }}-openssl mingw-w64-${{ matrix.arch }}-zlib git base-devel
 
     - name: Build FreeRDP STATICALLY (${{ matrix.bit }}-bit)
       run: |
-        # نصب اجباری گیت در صورت باگ خوردن MSYS2
         pacman -S --needed --noconfirm git
         
-        # دانلود سورس FreeRDP
         git clone --depth 1 https://github.com/FreeRDP/FreeRDP.git
         cd FreeRDP
         mkdir build && cd build
         
-        # کانفیگ برای بیلد کاملاً استاتیک و بدون حذفیات اضافی
+        # تیر خلاص به تمام زیرسیستم‌های گرافیکی و صوتی مزاحم
         cmake -G Ninja \
           -DCMAKE_BUILD_TYPE=Release \
           -DBUILD_SHARED_LIBS=OFF \
           -DWITH_SERVER=OFF \
           -DWITH_SAMPLE=OFF \
           -DWITH_FFMPEG=OFF \
+          -DWITH_DSP_FFMPEG=OFF \
+          -DWITH_VIDEO_FFMPEG=OFF \
+          -DWITH_OPUS=OFF \
+          -DWITH_CAIRO=OFF \
+          -DWITH_SWSCALE=OFF \
           -DWITH_ALSA=OFF \
           -DWITH_PULSE=OFF \
+          -DWITH_OSS=OFF \
           -DWITH_CUPS=OFF \
           -DWITH_WAYLAND=OFF \
           -DWITH_X11=OFF \
           -DCMAKE_INSTALL_PREFIX=${MSYSTEM_PREFIX} \
           ..
           
-        # بیلد و نصب در محیط MSYS
         ninja install
 
     - name: Compile ARBrute (${{ matrix.bit }}-bit)
