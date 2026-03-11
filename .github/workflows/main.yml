@@ -1,12 +1,23 @@
-name: Build TRUE STATIC ARBrute
+name: Ultimate Static Builder (32 & 64 Bit)
 
 on:
   workflow_dispatch:
 
 jobs:
   build:
+    strategy:
+      matrix:
+        include:
+          - arch: x86_64
+            env: mingw64
+            bit: 64
+            cpu: x86-64
+          - arch: i686
+            env: mingw32
+            bit: 32
+            cpu: i686
+            
     runs-on: windows-latest
-    
     defaults:
       run:
         shell: msys2 {0}
@@ -15,22 +26,25 @@ jobs:
     - name: Checkout Code
       uses: actions/checkout@v4
 
-    - name: Setup MSYS2
+    - name: Setup MSYS2 (${{ matrix.bit }}-bit)
       uses: msys2/setup-msys2@v2
       with:
+        msystem: ${{ matrix.env }}
         update: true
-        install: >-
-          mingw-w64-x86_64-gcc
-          mingw-w64-x86_64-cmake
-          mingw-w64-x86_64-ninja
-          mingw-w64-x86_64-openssl
-          mingw-w64-x86_64-zlib
+        # لیست نصب رو یک‌خطی کردم که گیت‌هاب گیج نشه
+        install: mingw-w64-${{ matrix.arch }}-gcc mingw-w64-${{ matrix.arch }}-cmake mingw-w64-${{ matrix.arch }}-ninja mingw-w64-${{ matrix.arch }}-openssl mingw-w64-${{ matrix.arch }}-zlib git base-devel
 
-    - name: Download & Build FreeRDP STATICALLY
+    - name: Build FreeRDP STATICALLY (${{ matrix.bit }}-bit)
       run: |
+        # نصب اجباری گیت در صورت باگ خوردن MSYS2
+        pacman -S --needed --noconfirm git
+        
+        # دانلود سورس FreeRDP
         git clone --depth 1 https://github.com/FreeRDP/FreeRDP.git
         cd FreeRDP
         mkdir build && cd build
+        
+        # کانفیگ برای بیلد کاملاً استاتیک و بدون حذفیات اضافی
         cmake -G Ninja \
           -DCMAKE_BUILD_TYPE=Release \
           -DBUILD_SHARED_LIBS=OFF \
@@ -42,23 +56,26 @@ jobs:
           -DWITH_CUPS=OFF \
           -DWITH_WAYLAND=OFF \
           -DWITH_X11=OFF \
-          -DCMAKE_INSTALL_PREFIX=/mingw64 \
+          -DCMAKE_INSTALL_PREFIX=${MSYSTEM_PREFIX} \
           ..
+          
+        # بیلد و نصب در محیط MSYS
         ninja install
 
-    - name: Compile ARBrute (True Static)
+    - name: Compile ARBrute (${{ matrix.bit }}-bit)
       run: |
-        g++ ARBrute.cpp -o ARBrute_STATIC.exe \
-        -I/mingw64/include/freerdp3 -I/mingw64/include/winpr3 \
+        g++ ARBrute.cpp -o ARBrute_${{ matrix.bit }}bit.exe \
+        -I${MSYSTEM_PREFIX}/include/freerdp3 \
+        -I${MSYSTEM_PREFIX}/include/winpr3 \
         -static \
-        -L/mingw64/lib \
+        -L${MSYSTEM_PREFIX}/lib \
         -lfreerdp-client3 -lfreerdp3 -lwinpr3 \
         -lssl -lcrypto -lz \
         -lws2_32 -lwinmm -lcrypt32 -lsecur32 -lbcrypt -liphlpapi \
-        -O3 -std=c++17 -march=native -mthreads
+        -O3 -std=c++17 -march=${{ matrix.cpu }} -mtune=generic -mthreads
 
     - name: Upload Final Static EXE
       uses: actions/upload-artifact@v4
       with:
-        name: ARBrute-True-Static
-        path: ARBrute_STATIC.exe
+        name: ARBrute-Static-${{ matrix.bit }}bit
+        path: ARBrute_${{ matrix.bit }}bit.exe
