@@ -1,4 +1,4 @@
-name: Build Static ARBrute
+name: Build Portable ARBrute (Enigma-Ready)
 
 on:
   workflow_dispatch:
@@ -6,7 +6,6 @@ on:
     branches: [ main ]
     paths:
       - 'ARBrute.cpp'
-      - '.github/workflows/build_static.yml'
 
 jobs:
   build:
@@ -14,144 +13,64 @@ jobs:
     defaults:
       run:
         shell: msys2 {0}
-    
-    strategy:
-      matrix:
-        include:
-          - arch: x86_64
-            env: mingw64
-            bit: 64
-            cpu: x86-64-v3
 
     steps:
-    - name: Checkout Repository
+    - name: Checkout
       uses: actions/checkout@v4
-      with:
-        fetch-depth: 1
 
     - name: Setup MSYS2
       uses: msys2/setup-msys2@v2
       with:
-        msystem: ${{ matrix.env }}
+        msystem: mingw64
         update: true
         install: >
-          mingw-w64-${{ matrix.arch }}-gcc
-          mingw-w64-${{ matrix.arch }}-crt-git
-          mingw-w64-${{ matrix.arch }}-cmake
-          mingw-w64-${{ matrix.arch }}-ninja
-          mingw-w64-${{ matrix.arch }}-openssl
-          mingw-w64-${{ matrix.arch }}-zlib
-          mingw-w64-${{ matrix.arch }}-upx
+          mingw-w64-x86_64-gcc
+          mingw-w64-x86_64-cmake
+          mingw-w64-x86_64-ninja
+          mingw-w64-x86_64-freerdp
+          mingw-w64-x86_64-openssl
+          mingw-w64-x86_64-zlib
+          mingw-w64-x86_64-upx
           git
-          base-devel
-          patch
 
-    - name: Build FreeRDP (Static, Minimal)
+    - name: Compile ARBrute (Dynamic)
       run: |
-        set -e
-        echo "🔧 Building FreeRDP statically..."
-        
-        # ✅ LATEST STABLE RELEASE (3.23.0)
-        git clone --depth 1 --branch 3.23.0 https://github.com/FreeRDP/FreeRDP.git freerdp-src
-        
-        cd freerdp-src
-        mkdir build && cd build
-        
-        cmake -G Ninja \
-          -DCMAKE_BUILD_TYPE=Release \
-          -DCMAKE_INSTALL_PREFIX=${MSYSTEM_PREFIX} \
-          -DBUILD_SHARED_LIBS=OFF \
-          -DSTATIC_CHANNELS=ON \
-          -DWITH_SERVER=OFF \
-          -DWITH_SERVER_INTERFACE=OFF \
-          -DWITH_SAMPLE=OFF \
-          -DWITH_CLIENT=OFF \
-          -DWITH_CLIENT_INTERFACE=OFF \
-          -DWITH_PROXY=OFF \
-          -DWITH_PROXY_EMULATOR=OFF \
-          -DWITH_FFMPEG=OFF \
-          -DWITH_DSP_FFMPEG=OFF \
-          -DWITH_VIDEO_FFMPEG=OFF \
-          -DWITH_OPUS=OFF \
-          -DWITH_GSM=OFF \
-          -DWITH_LAME=OFF \
-          -DWITH_FAAD2=OFF \
-          -DWITH_FAAC=OFF \
-          -DWITH_SOXR=OFF \
-          -DWITH_OPENH264=OFF \
-          -DWITH_ALSA=OFF \
-          -DWITH_PULSE=OFF \
-          -DWITH_OSS=OFF \
-          -DWITH_JACK=OFF \
-          -DWITH_CAIRO=OFF \
-          -DWITH_SWSCALE=OFF \
-          -DWITH_GFX_H264=OFF \
-          -DWITH_GFX_AVC420=OFF \
-          -DWITH_GFX_AVC444=OFF \
-          -DWITH_REMOTEFX=OFF \
-          -DWITH_PCSC=OFF \
-          -DWITH_SMARTCARD=OFF \
-          -DWITH_SMARTCARD_EMULATE=OFF \
-          -DWITH_CUPS=OFF \
-          -DWITH_LIBUSB=OFF \
-          -DWITH_URIPARSER=OFF \
-          -DWITH_X11=OFF \
-          -DWITH_WAYLAND=OFF \
-          -DWITH_VNC=OFF \
-          -DWITH_CHANNELS=OFF \
-          -DWITH_CLIENT_CHANNELS=OFF \
-          -DWITH_SERVER_CHANNELS=OFF \
-          -DWITH_OPENSSL=ON \
-          -DWITH_ZLIB=ON \
-          -DWITH_WINPR=ON \
-          -DWITH_NATIVE_SSPI=ON \
-          -DWITH_WINPR_TOOLS=OFF \
-          -DWITH_MANPAGES=OFF \
-          -DWITH_DEVELOPER=OFF \
-          -DWITH_DEBUG_ALL=OFF \
-          -DCMAKE_C_FLAGS="-Os -ffunction-sections -fdata-sections -flto -D_WIN32_WINNT=0x0601" \
-          -DCMAKE_CXX_FLAGS="-Os -ffunction-sections -fdata-sections -flto -D_WIN32_WINNT=0x0601" \
-          -DCMAKE_EXE_LINKER_FLAGS="-Wl,--gc-sections -s -flto" \
-          ..
-        
-        ninja -j$(nproc)
-        ninja install
-        echo "✅ FreeRDP 3.23.0 built"
-
-    - name: Compile ARBrute (Pure Static)
-      run: |
-        set -e
-        cd $GITHUB_WORKSPACE
-        
         g++ ARBrute.cpp -o ARBrute.exe \
-          -I${MSYSTEM_PREFIX}/include/freerdp3 \
-          -I${MSYSTEM_PREFIX}/include/winpr3 \
-          -I${MSYSTEM_PREFIX}/include \
-          -L${MSYSTEM_PREFIX}/lib \
-          -lfreerdp3 -lfreerdp-client3 -lwinpr3 \
-          -lssl -lcrypto -lz \
-          -lws2_32 -lwinmm -lcrypt32 -lsecur32 -lbcrypt -liphlpapi \
-          -lmpr -lwtsapi32 -lshlwapi \
-          -static -static-libgcc -static-libstdc++ \
-          -Os -std=c++17 -march=${{ matrix.cpu }} -mthreads -DNDEBUG \
-          -ffunction-sections -fdata-sections -flto \
-          -Wl,--gc-sections -Wl,-s -Wl,--strip-all
-        
-        echo "✅ Compiled: $(ls -lh ARBrute.exe)"
+          -lws2_32 -lfreerdp3 -lfreerdp-client3 -lwinpr3 \
+          -lssl -lcrypto -lwinmm \
+          -O3 -std=c++17 -march=x86-64-v3 -mthreads -DNDEBUG \
+          -I/mingw64/include/freerdp3 \
+          -I/mingw64/include/winpr3 \
+          -L/mingw64/lib
 
-    - name: Optimize with UPX
+    - name: Copy ONLY Essential DLLs
       run: |
-        set -e
-        strip --strip-all ARBrute.exe 2>/dev/null || true
-        if command -v upx &> /dev/null; then
-          echo "📦 UPX compressing..."
-          upx --best --ultra-brute ARBrute.exe
-        fi
-        echo "📊 Final size: $(du -h ARBrute.exe | cut -f1)"
+        cp /mingw64/bin/libfreerdp3.dll .
+        cp /mingw64/bin/libfreerdp-client3.dll .
+        cp /mingw64/bin/libwinpr3.dll .
+        cp /mingw64/bin/libssl-3-x64.dll .
+        cp /mingw64/bin/libcrypto-3-x64.dll .
+        cp /mingw64/bin/libwinpthread-1.dll .
+        cp /mingw64/bin/libstdc++-6.dll .
+        cp /mingw64/bin/libgcc_s_seh-1.dll .
+        cp /mingw64/bin/zlib1.dll .
+        
+        echo "DLL sizes:"
+        du -h *.dll | sort -hr
+        echo "Total DLL size: $(du -ch *.dll | tail -1 | cut -f1)"
+
+    - name: Compress with UPX
+      run: |
+        upx --best ARBrute.exe
+        for dll in *.dll; do upx --best "$dll" 2>/dev/null || true; done
+        echo "After UPX:"
+        du -h ARBrute.exe *.dll
 
     - name: Upload Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: ARBrute-Static-Windows-${{ matrix.bit }}bit
-        path: ARBrute.exe
+        name: ARBrute-Portable
+        path: |
+          ARBrute.exe
+          *.dll
         retention-days: 30
