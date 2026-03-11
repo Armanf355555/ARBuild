@@ -51,8 +51,8 @@ jobs:
         set -e
         echo "🔧 Building FreeRDP statically..."
         
-        # Use release branch (stable)
-        git clone --depth 1 --branch release-3.x https://github.com/FreeRDP/FreeRDP.git freerdp-src
+        # ✅ LATEST STABLE RELEASE (3.23.0)
+        git clone --depth 1 --branch 3.23.0 https://github.com/FreeRDP/FreeRDP.git freerdp-src
         
         cd freerdp-src
         mkdir build && cd build
@@ -116,7 +116,7 @@ jobs:
         
         ninja -j$(nproc)
         ninja install
-        echo "✅ FreeRDP built"
+        echo "✅ FreeRDP 3.23.0 built"
 
     - name: Compile ARBrute (Pure Static)
       run: |
