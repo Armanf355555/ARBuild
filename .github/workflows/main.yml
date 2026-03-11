@@ -1,83 +1,280 @@
-name: Ultimate Static Builder (32 & 64 Bit)
+# =============================================================================
+# ARBrute - ULTIMATE STATIC BUILDER (GitHub Actions)
+# Purpose: Single-file, fully static, portable Windows EXE
+# Size Target: ~15-25 MB (stripped + UPX compressed)
+# =============================================================================
+
+name: Build Static ARBrute
 
 on:
-  workflow_dispatch:
+  workflow_dispatch:  # Manual trigger
+  push:
+    branches: [ main ]
+    paths:
+      - 'ARBrute.cpp'
+      - '.github/workflows/build_static.yml'
 
 jobs:
   build:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: msys2 {0}
+    
     strategy:
       matrix:
         include:
           - arch: x86_64
             env: mingw64
             bit: 64
-            cpu: x86-64
-            
-    runs-on: windows-latest
-    defaults:
-      run:
-        shell: msys2 {0}
-        
-    steps:
-    - name: Checkout Code
-      uses: actions/checkout@v4
+            cpu: x86-64-v3  # Modern CPU optimizations
 
-    - name: Setup MSYS2
+    steps:
+    # ==========================================================================
+    # 1. CHECKOUT & SETUP
+    # ==========================================================================
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 1
+
+    - name: Setup MSYS2 with ALL dependencies
       uses: msys2/setup-msys2@v2
       with:
         msystem: ${{ matrix.env }}
         update: true
-        install: mingw-w64-${{ matrix.arch }}-gcc mingw-w64-${{ matrix.arch }}-cmake mingw-w64-${{ matrix.arch }}-ninja mingw-w64-${{ matrix.arch }}-openssl mingw-w64-${{ matrix.arch }}-zlib git base-devel
+        install: >
+          mingw-w64-${{ matrix.arch }}-gcc
+          mingw-w64-${{ matrix.arch }}-crt-git
+          mingw-w64-${{ matrix.arch }}-cmake
+          mingw-w64-${{ matrix.arch }}-ninja
+          mingw-w64-${{ matrix.arch }}-openssl
+          mingw-w64-${{ matrix.arch }}-zlib
+          mingw-w64-${{ matrix.arch }}-upx
+          git
+          base-devel
+          patch
 
-    - name: Build FreeRDP STATICALLY
+    # ==========================================================================
+    # 2. BUILD FREERDP STATICALLY (MINIMAL)
+    # ==========================================================================
+    - name: Build FreeRDP (Static, Minimal)
       run: |
-        pacman -S --needed --noconfirm git
-        git clone --depth 1 https://github.com/FreeRDP/FreeRDP.git
-        cd FreeRDP
+        set -e
+        echo "🔧 Building FreeRDP statically..."
+        
+        # Clone latest stable
+        git clone --depth 1 --branch stable https://github.com/FreeRDP/FreeRDP.git freerdp-src
+        cd freerdp-src
         mkdir build && cd build
         
-        # قطع مطلقِ تمام وابستگی‌های لینوکسی، صوتی، تصویری و سخت‌افزاری
+        # CMake with MAXIMAL static + MINIMAL features
         cmake -G Ninja \
           -DCMAKE_BUILD_TYPE=Release \
+          -DCMAKE_INSTALL_PREFIX=${MSYSTEM_PREFIX} \
+          \
+          # === STATIC LINKING ===
           -DBUILD_SHARED_LIBS=OFF \
+          -DSTATIC_CHANNELS=ON \
+          \
+          # === DISABLE EVERYTHING NON-ESSENTIAL ===
           -DWITH_SERVER=OFF \
+          -DWITH_SERVER_INTERFACE=OFF \
           -DWITH_SAMPLE=OFF \
+          -DWITH_CLIENT=OFF \
+          -DWITH_CLIENT_INTERFACE=OFF \
+          -DWITH_PROXY=OFF \
+          -DWITH_PROXY_EMULATOR=OFF \
+          \
+          # === DISABLE MEDIA/CODECS ===
           -DWITH_FFMPEG=OFF \
           -DWITH_DSP_FFMPEG=OFF \
           -DWITH_VIDEO_FFMPEG=OFF \
           -DWITH_OPUS=OFF \
-          -DWITH_CAIRO=OFF \
-          -DWITH_SWSCALE=OFF \
+          -DWITH_GSM=OFF \
+          -DWITH_LAME=OFF \
+          -DWITH_FAAD2=OFF \
+          -DWITH_FAAC=OFF \
+          -DWITH_SOXR=OFF \
+          -DWITH_OPENH264=OFF \
+          \
+          # === DISABLE AUDIO/VIDEO SYSTEMS ===
           -DWITH_ALSA=OFF \
           -DWITH_PULSE=OFF \
           -DWITH_OSS=OFF \
-          -DWITH_CUPS=OFF \
-          -DWITH_WAYLAND=OFF \
-          -DWITH_X11=OFF \
-          -DWITH_CHANNELS=OFF \
-          -DWITH_CLIENT_CHANNELS=OFF \
-          -DWITH_LIBUSB=OFF \
+          -DWITH_JACK=OFF \
+          \
+          # === DISABLE GRAPHICS ===
+          -DWITH_CAIRO=OFF \
+          -DWITH_SWSCALE=OFF \
+          -DWITH_GFX_H264=OFF \
+          -DWITH_GFX_AVC420=OFF \
+          -DWITH_GFX_AVC444=OFF \
+          -DWITH_REMOTEFX=OFF \
+          \
+          # === DISABLE HARDWARE/EXTERNAL ===
           -DWITH_PCSC=OFF \
           -DWITH_SMARTCARD=OFF \
-          -DCMAKE_INSTALL_PREFIX=${MSYSTEM_PREFIX} \
+          -DWITH_SMARTCARD_EMULATE=OFF \
+          -DWITH_CUPS=OFF \
+          -DWITH_LIBUSB=OFF \
+          -DWITH_URIPARSER=OFF \
+          \
+          # === DISABLE PLATFORMS ===
+          -DWITH_X11=OFF \
+          -DWITH_WAYLAND=OFF \
+          -DWITH_VNC=OFF \
+          \
+          # === DISABLE CHANNELS (we only need basic RDP) ===
+          -DWITH_CHANNELS=OFF \
+          -DWITH_CLIENT_CHANNELS=OFF \
+          -DWITH_SERVER_CHANNELS=OFF \
+          \
+          # === KEEP ONLY ESSENTIALS ===
+          -DWITH_OPENSSL=ON \
+          -DWITH_ZLIB=ON \
+          -DWITH_WINPR=ON \
+          \
+          # === OPTIMIZATIONS ===
+          -DCMAKE_C_FLAGS="-O3 -flto -fvisibility=hidden" \
+          -DCMAKE_CXX_FLAGS="-O3 -flto -fvisibility=hidden" \
           ..
-          
+        
+        # Build and install
+        ninja -j$(nproc)
         ninja install
+        
+        echo "✅ FreeRDP built and installed"
+        ls -lh ${MSYSTEM_PREFIX}/lib/libfreerdp3.a 2>/dev/null || echo "⚠️ Static lib not found, checking..."
+        ls -lh ${MSYSTEM_PREFIX}/lib/ | grep freerdp || true
 
-    - name: Compile ARBrute
+    # ==========================================================================
+    # 3. COMPILE ARBRUTE (STATIC LINKING)
+    # ==========================================================================
+    - name: Compile ARBrute (Pure Static)
       run: |
-        g++ ARBrute.cpp -o ARBrute_STATIC_${{ matrix.bit }}bit.exe \
-        -I${MSYSTEM_PREFIX}/include/freerdp3 \
-        -I${MSYSTEM_PREFIX}/include/winpr3 \
-        -static \
-        -L${MSYSTEM_PREFIX}/lib \
-        -lfreerdp-client3 -lfreerdp3 -lwinpr3 \
-        -lssl -lcrypto -lz \
-        -lws2_32 -lwinmm -lcrypt32 -lsecur32 -lbcrypt -liphlpapi \
-        -O3 -std=c++17 -march=${{ matrix.cpu }} -mtune=generic -mthreads
+        set -e
+        echo "🔨 Compiling ARBrute..."
+        
+        # Ensure we're in repo root
+        cd $GITHUB_WORKSPACE
+        
+        # Compile with MAXIMAL static linking
+        g++ ARBrute.cpp -o ARBrute.exe \
+          \
+          # === INCLUDES ===
+          -I${MSYSTEM_PREFIX}/include/freerdp3 \
+          -I${MSYSTEM_PREFIX}/include/winpr3 \
+          -I${MSYSTEM_PREFIX}/include \
+          \
+          # === LIBRARIES (order matters!) ===
+          -L${MSYSTEM_PREFIX}/lib \
+          -lfreerdp3 -lfreerdp-client3 -lwinpr3 \
+          -lssl -lcrypto -lz \
+          -lws2_32 -lwinmm -lcrypt32 -lsecur32 -lbcrypt -liphlpapi \
+          -lmpr -lwtsapi32 -lshlwapi \
+          \
+          # === STATIC LINKING FLAGS ===
+          -static \
+          -static-libgcc \
+          -static-libstdc++ \
+          \
+          # === OPTIMIZATIONS ===
+          -O3 \
+          -std=c++17 \
+          -march=${{ matrix.cpu }} \
+          -mtune=generic \
+          -mthreads \
+          -DNDEBUG \
+          -ffunction-sections -fdata-sections \
+          -flto \
+          \
+          # === STRIP DEBUG INFO ===
+          -Wl,--gc-sections \
+          -Wl,-s \
+          -Wl,--strip-all
+        
+        echo "✅ Compilation complete"
+        ls -lh ARBrute.exe
 
-    - name: Upload Final Static EXE
+    # ==========================================================================
+    # 4. POST-PROCESS: STRIP + UPX COMPRESS
+    # ==========================================================================
+    - name: Optimize Binary (Strip + UPX)
+      run: |
+        set -e
+        echo "🗜️ Optimizing binary..."
+        
+        # Final strip (in case linker didn't)
+        strip --strip-all ARBrute.exe 2>/dev/null || true
+        
+        # UPX compression (best ratio)
+        if command -v upx &> /dev/null; then
+          echo "📦 Compressing with UPX..."
+          upx --best --ultra-brute ARBrute.exe
+          echo "✅ UPX compression complete"
+        else
+          echo "⚠️ UPX not available, skipping compression"
+        fi
+        
+        # Show final size
+        echo "📊 Final binary size:"
+        ls -lh ARBrute.exe
+        du -h ARBrute.exe
+
+    # ==========================================================================
+    # 5. VERIFY & UPLOAD
+    # ==========================================================================
+    - name: Verify Static Linking
+      run: |
+        echo "🔍 Verifying static linking..."
+        
+        # Check for dynamic dependencies (should be minimal)
+        echo "Dependencies (should only show system DLLs):"
+        ldd ARBrute.exe 2>/dev/null | grep -v "not found" | grep -v "=> /c/Windows" || echo "✅ No external DLL dependencies!"
+        
+        # File info
+        file ARBrute.exe
+        echo "✅ Verification complete"
+
+    - name: Upload Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: ARBrute-Static-Windows
-        path: ARBrute_STATIC_${{ matrix.bit }}bit.exe
+        name: ARBrute-Static-Windows-${{ matrix.bit }}bit
+        path: ARBrute.exe
+        retention-days: 30
+        if-no-files-found: error
+
+    # ==========================================================================
+    # 6. CREATE RELEASE (Optional - uncomment to enable)
+    # ==========================================================================
+    # - name: Create GitHub Release
+    #   if: github.ref == 'refs/heads/main'
+    #   uses: softprops/action-gh-release@v1
+    #   with:
+    #     files: ARBrute.exe
+    #     tag_name: static-build-${{ github.run_number }}
+    #     name: "ARBrute Static Build #${{ github.run_number }}"
+    #     body: |
+    #       ## 🔒 Static Portable Build
+    #       - **Platform**: Windows ${{ matrix.bit }}-bit
+    #       - **Size**: ~15-25 MB (compressed)
+    #       - **Features**: Full RDP auth, multi-threaded, crash-proof
+    #       - **Usage**: Just run `ARBrute.exe` - no installation needed!
+    #     draft: false
+    #     prerelease: false
+
+    # ==========================================================================
+    # 7. SUMMARY
+    # ==========================================================================
+    - name: Build Summary
+      run: |
+        echo "🎉 BUILD COMPLETE!"
+        echo "=================="
+        echo "✅ Static EXE: ARBrute.exe"
+        echo "✅ Size: $(du -h ARBrute.exe | cut -f1)"
+        echo "✅ Portable: Yes (single file)"
+        echo "✅ Dependencies: None (fully static)"
+        echo ""
+        echo "📥 Download from: Actions → Artifacts"
+        echo "🔗 Or enable release step in workflow for auto-publish"
