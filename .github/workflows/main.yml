@@ -41,7 +41,7 @@ jobs:
         cd FreeRDP
         mkdir build && cd build
         
-        # تیر خلاص به تمام زیرسیستم‌های گرافیکی و صوتی مزاحم
+        # قطع کردن تمام سیستم‌های اضافی (صدا، تصویر، USB، پرینتر و...)
         cmake -G Ninja \
           -DCMAKE_BUILD_TYPE=Release \
           -DBUILD_SHARED_LIBS=OFF \
@@ -59,6 +59,10 @@ jobs:
           -DWITH_CUPS=OFF \
           -DWITH_WAYLAND=OFF \
           -DWITH_X11=OFF \
+          -DWITH_CHANNELS=OFF \
+          -DWITH_CLIENT_CHANNELS=OFF \
+          -DCHANNEL_URBDRC=OFF \
+          -DCHANNEL_URBDRC_CLIENT=OFF \
           -DCMAKE_INSTALL_PREFIX=${MSYSTEM_PREFIX} \
           ..
           
