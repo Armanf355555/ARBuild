@@ -26,17 +26,17 @@ jobs:
 
     - name: Compile ARBrute
       run: |
-        g++ ARBrute.cpp -o ARBrute.exe -lws2_32 -lwinmm -lfreerdp3 -lfreerdp-client3 -lwinpr3 -lssl -lcrypto -O3 -std=c++17 -march=native -mthreads
+        g++ ARBrute.cpp -o ARBrute.exe -I/mingw64/include/freerdp3 -I/mingw64/include/winpr3 -I/mingw64/include -L/mingw64/lib -lws2_32 -lwinmm -lfreerdp3 -lfreerdp-client3 -lwinpr3 -lssl -lcrypto -O3 -std=c++17 -march=native -mthreads
         
     - name: Pack Everything (Safe Mode)
       run: |
         mkdir ARBrute_Release
         cp ARBrute.exe ARBrute_Release/
-        # پیدا کردن و کپی کردن تمام DLLها با حلقه امن
+        # پیدا کردن اتوماتیک DLLها
         for dll in $(ldd ARBrute.exe | grep -i '\.dll' | grep -iv '/c/Windows' | awk '{print $3}'); do
           cp "$dll" ARBrute_Release/ 2>/dev/null || true
         done
-        # کپی پلاگین‌های مخفی در صورت وجود
+        # کپی پلاگین‌های مخفی FreeRDP
         cp /mingw64/lib/freerdp3/*.dll ARBrute_Release/ 2>/dev/null || true
 
     - name: Upload Final ZIP
