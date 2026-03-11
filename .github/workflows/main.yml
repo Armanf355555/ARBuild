@@ -1,4 +1,4 @@
-name: Online Auto-Compiler
+name: Build TRUE STATIC ARBrute
 
 on:
   workflow_dispatch:
@@ -15,32 +15,50 @@ jobs:
     - name: Checkout Code
       uses: actions/checkout@v4
 
-    - name: Setup MSYS2 & Install Libraries
+    - name: Setup MSYS2
       uses: msys2/setup-msys2@v2
       with:
         update: true
         install: >-
           mingw-w64-x86_64-gcc
-          mingw-w64-x86_64-freerdp
+          mingw-w64-x86_64-cmake
+          mingw-w64-x86_64-ninja
           mingw-w64-x86_64-openssl
+          mingw-w64-x86_64-zlib
 
-    - name: Compile ARBrute
+    - name: Download & Build FreeRDP STATICALLY
       run: |
-        g++ ARBrute.cpp -o ARBrute.exe -I/mingw64/include/freerdp3 -I/mingw64/include/winpr3 -I/mingw64/include -L/mingw64/lib -lws2_32 -lwinmm -lfreerdp3 -lfreerdp-client3 -lwinpr3 -lssl -lcrypto -O3 -std=c++17 -march=native -mthreads
-        
-    - name: Pack Everything (Safe Mode)
-      run: |
-        mkdir ARBrute_Release
-        cp ARBrute.exe ARBrute_Release/
-        # پیدا کردن اتوماتیک DLLها
-        for dll in $(ldd ARBrute.exe | grep -i '\.dll' | grep -iv '/c/Windows' | awk '{print $3}'); do
-          cp "$dll" ARBrute_Release/ 2>/dev/null || true
-        done
-        # کپی پلاگین‌های مخفی FreeRDP
-        cp /mingw64/lib/freerdp3/*.dll ARBrute_Release/ 2>/dev/null || true
+        git clone --depth 1 https://github.com/FreeRDP/FreeRDP.git
+        cd FreeRDP
+        mkdir build && cd build
+        cmake -G Ninja \
+          -DCMAKE_BUILD_TYPE=Release \
+          -DBUILD_SHARED_LIBS=OFF \
+          -DWITH_SERVER=OFF \
+          -DWITH_SAMPLE=OFF \
+          -DWITH_FFMPEG=OFF \
+          -DWITH_ALSA=OFF \
+          -DWITH_PULSE=OFF \
+          -DWITH_CUPS=OFF \
+          -DWITH_WAYLAND=OFF \
+          -DWITH_X11=OFF \
+          -DCMAKE_INSTALL_PREFIX=/mingw64 \
+          ..
+        ninja install
 
-    - name: Upload Final ZIP
+    - name: Compile ARBrute (True Static)
+      run: |
+        g++ ARBrute.cpp -o ARBrute_STATIC.exe \
+        -I/mingw64/include/freerdp3 -I/mingw64/include/winpr3 \
+        -static \
+        -L/mingw64/lib \
+        -lfreerdp-client3 -lfreerdp3 -lwinpr3 \
+        -lssl -lcrypto -lz \
+        -lws2_32 -lwinmm -lcrypt32 -lsecur32 -lbcrypt -liphlpapi \
+        -O3 -std=c++17 -march=native -mthreads
+
+    - name: Upload Final Static EXE
       uses: actions/upload-artifact@v4
       with:
-        name: ARBrute-Ready-To-Run
-        path: ARBrute_Release/
+        name: ARBrute-True-Static
+        path: ARBrute_STATIC.exe
