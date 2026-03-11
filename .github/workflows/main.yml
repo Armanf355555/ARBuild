@@ -1,0 +1,42 @@
+name: Online Auto-Compiler
+
+on:
+  workflow_dispatch: # برای اجرای دستی
+
+jobs:
+  build:
+    runs-on: windows-latest
+    
+    defaults:
+      run:
+        shell: msys2 {0}
+        
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
+
+    - name: Setup MSYS2 & Install Libraries
+      uses: msys2/setup-msys2@v2
+      with:
+        update: true
+        install: >-
+          mingw-w64-x86_64-gcc
+          mingw-w64-x86_64-freerdp
+          mingw-w64-x86_64-openssl
+
+    - name: Compile ARBrute
+      run: |
+        g++ ARBrute.cpp -o ARBrute.exe -lws2_32 -lwinmm -lfreerdp3 -lfreerdp-client3 -lwinpr3 -lssl -lcrypto -O3 -std=c++17 -march=native -mthreads
+        
+    - name: Pack Everything (EXE + DLLs)
+      run: |
+        mkdir ARBrute_Release
+        cp ARBrute.exe ARBrute_Release/
+        ldd ARBrute.exe | grep -i "\.dll" | grep -iv "/c/Windows" | awk '{print $3}' | xargs -I {} cp "{}" ARBrute_Release/
+        cp /mingw64/lib/freerdp3/*.dll ARBrute_Release/ 2>/dev/null || true
+
+    - name: Upload Final ZIP
+      uses: actions/upload-artifact@v4
+      with:
+        name: ARBrute-Ready-To-Run
+        path: ARBrute_Release/
